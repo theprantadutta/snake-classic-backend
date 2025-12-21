@@ -15,7 +15,7 @@ public class TournamentConfiguration : IEntityTypeConfiguration<Tournament>
         builder.Property(t => t.Description).HasColumnType("text");
         builder.Property(t => t.Type).HasConversion<string>().HasMaxLength(50);
         builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(50);
-        builder.Property(t => t.PrizePool).HasColumnType("jsonb");
+        builder.Property(t => t.PrizeDistribution).HasColumnType("jsonb");
         builder.Property(t => t.Rules).HasColumnType("jsonb");
 
         builder.HasIndex(t => t.TournamentId).IsUnique();

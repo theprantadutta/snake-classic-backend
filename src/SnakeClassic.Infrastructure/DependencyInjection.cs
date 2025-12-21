@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SnakeClassic.Application.Common.Interfaces;
 using SnakeClassic.Infrastructure.Persistence;
 using SnakeClassic.Infrastructure.Services;
+using SnakeClassic.Infrastructure.Services.BackgroundJobs;
 
 namespace SnakeClassic.Infrastructure;
 
@@ -56,6 +57,9 @@ public static class DependencyInjection
 
         // DateTime service
         services.AddSingleton<IDateTimeService, DateTimeService>();
+
+        // Background job services
+        services.AddScoped<INotificationJobService, NotificationJobService>();
 
         return services;
     }

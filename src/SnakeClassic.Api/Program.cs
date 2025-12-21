@@ -16,6 +16,7 @@ using SnakeClassic.Application;
 using SnakeClassic.Application.Common.Interfaces;
 using SnakeClassic.Application.Features.Achievements.Commands.SeedAchievements;
 using SnakeClassic.Infrastructure;
+using SnakeClassic.Infrastructure.Services.BackgroundJobs;
 
 // Load .env file if it exists (check multiple locations)
 var possibleEnvPaths = new[]
@@ -247,6 +248,9 @@ try
             hangfirePassword) }
     });
 
+    // Configure Hangfire recurring jobs (matching APScheduler from Python)
+    ConfigureRecurringJobs();
+
     // Map controllers and SignalR hub
     app.MapControllers();
     app.MapHub<GameHub>("/hubs/game");
@@ -278,6 +282,33 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+// Configure recurring background jobs (equivalent to Python APScheduler)
+static void ConfigureRecurringJobs()
+{
+    // Daily challenge reminder - runs at 9:00 AM every day
+    RecurringJob.AddOrUpdate<INotificationJobService>(
+        "daily-challenge-reminder",
+        service => service.SendDailyChallengeReminder(),
+        "0 9 * * *", // Cron: minute=0, hour=9, every day
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
+
+    // Weekly leaderboard update - runs every Sunday at 6:00 PM
+    RecurringJob.AddOrUpdate<INotificationJobService>(
+        "weekly-leaderboard-update",
+        service => service.SendWeeklyLeaderboardUpdate(),
+        "0 18 * * 0", // Cron: minute=0, hour=18, day_of_week=0 (Sunday)
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
+
+    // Retention campaign - runs at 2:00 PM every day
+    RecurringJob.AddOrUpdate<INotificationJobService>(
+        "retention-campaign",
+        service => service.SendRetentionNotifications(),
+        "0 14 * * *", // Cron: minute=0, hour=14, every day
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
+
+    Log.Information("Hangfire recurring jobs configured successfully");
 }
 
 // Hangfire authorization filter for dashboard with Basic Auth

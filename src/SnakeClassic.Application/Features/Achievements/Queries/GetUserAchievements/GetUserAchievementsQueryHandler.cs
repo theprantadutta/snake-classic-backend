@@ -6,7 +6,7 @@ using SnakeClassic.Application.Features.Achievements.DTOs;
 
 namespace SnakeClassic.Application.Features.Achievements.Queries.GetUserAchievements;
 
-public class GetUserAchievementsQueryHandler : IRequestHandler<GetUserAchievementsQuery, Result<List<UserAchievementDto>>>
+public class GetUserAchievementsQueryHandler : IRequestHandler<GetUserAchievementsQuery, Result<UserAchievementsResponseDto>>
 {
     private readonly IAppDbContext _context;
     private readonly ICurrentUserService _currentUser;
@@ -17,11 +17,11 @@ public class GetUserAchievementsQueryHandler : IRequestHandler<GetUserAchievemen
         _currentUser = currentUser;
     }
 
-    public async Task<Result<List<UserAchievementDto>>> Handle(GetUserAchievementsQuery request, CancellationToken cancellationToken)
+    public async Task<Result<UserAchievementsResponseDto>> Handle(GetUserAchievementsQuery request, CancellationToken cancellationToken)
     {
         if (!_currentUser.IsAuthenticated || !_currentUser.UserId.HasValue)
         {
-            return Result<List<UserAchievementDto>>.Unauthorized();
+            return Result<UserAchievementsResponseDto>.Unauthorized();
         }
 
         var userAchievements = await _context.UserAchievements
@@ -50,6 +50,6 @@ public class GetUserAchievementsQueryHandler : IRequestHandler<GetUserAchievemen
             ))
             .ToListAsync(cancellationToken);
 
-        return Result<List<UserAchievementDto>>.Success(userAchievements);
+        return Result<UserAchievementsResponseDto>.Success(new UserAchievementsResponseDto(userAchievements));
     }
 }

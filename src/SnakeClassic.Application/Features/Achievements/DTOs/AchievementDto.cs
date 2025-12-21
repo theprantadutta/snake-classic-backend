@@ -25,6 +25,10 @@ public record UserAchievementDto(
     bool RewardClaimed
 );
 
+public record UserAchievementsResponseDto(
+    List<UserAchievementDto> Achievements
+);
+
 public record UpdateProgressResultDto(
     bool Success,
     bool NewlyUnlocked,

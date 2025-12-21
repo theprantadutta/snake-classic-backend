@@ -1,8 +1,40 @@
+# Build outputs
 bin/
 obj/
 /packages/
+
+# IDE
+.idea/
+.vs/
+*.user
+*.suo
 riderModule.iml
 /_ReSharper.Caches/
+.vscode/
 
-.idea/
+# Claude
 .claude/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+
+# Firebase credentials
+firebase-admin-sdk.json
+**/firebase-admin-sdk.json
+*.p12
+*.p8
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test results
+TestResults/
+coverage/

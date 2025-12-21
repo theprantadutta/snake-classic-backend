@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using SnakeClassic.Application.Common.Interfaces;
 using SnakeClassic.Domain.Entities;
 
 namespace SnakeClassic.Infrastructure.Persistence;
 
-public class AppDbContext : DbContext
+public class AppDbContext : DbContext, IAppDbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -23,7 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<MultiplayerGame> MultiplayerGames => Set<MultiplayerGame>();
     public DbSet<MultiplayerPlayer> MultiplayerPlayers => Set<MultiplayerPlayer>();
     public DbSet<BattlePassSeason> BattlePassSeasons => Set<BattlePassSeason>();
-    public DbSet<UserBattlePassProgress> UserBattlePassProgress => Set<UserBattlePassProgress>();
+    public DbSet<UserBattlePassProgress> UserBattlePassProgresses => Set<UserBattlePassProgress>();
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<NotificationHistory> NotificationHistories => Set<NotificationHistory>();
     public DbSet<ScheduledJob> ScheduledJobs => Set<ScheduledJob>();

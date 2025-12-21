@@ -6,10 +6,11 @@ namespace SnakeClassic.Domain.Entities;
 public class MultiplayerGame : BaseEntity
 {
     public string GameId { get; set; } = null!;
-    public GameMode Mode { get; set; } = GameMode.Classic;
+    public MultiplayerGameMode Mode { get; set; } = MultiplayerGameMode.FreeForAll;
     public MultiplayerGameStatus Status { get; set; } = MultiplayerGameStatus.Waiting;
-    public string? RoomCode { get; set; }
+    public string RoomCode { get; set; } = null!;
     public int MaxPlayers { get; set; } = 4;
+    public Guid? HostId { get; set; }
     public List<Dictionary<string, object>>? FoodPositions { get; set; }
     public List<Dictionary<string, object>>? PowerUps { get; set; }
     public Dictionary<string, object>? GameSettings { get; set; }

@@ -12,6 +12,8 @@ public class UserBattlePassProgress : BaseEntity
     public int CurrentXp { get; set; }
     public int TotalXpEarned { get; set; }
     public List<string> ClaimedRewards { get; set; } = new();
+    public List<int> ClaimedFreeRewards { get; set; } = new();
+    public List<int> ClaimedPremiumRewards { get; set; } = new();
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation properties

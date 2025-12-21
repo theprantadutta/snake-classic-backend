@@ -9,6 +9,7 @@ public class FcmToken : BaseEntity
     public string Platform { get; set; } = "flutter";
     public List<string> SubscribedTopics { get; set; } = new();
     public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
+    public DateTime LastUsedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation property

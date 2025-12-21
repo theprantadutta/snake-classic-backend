@@ -23,6 +23,7 @@ public class User : BaseEntity
     public int Coins { get; set; }
     public DateTime JoinedDate { get; set; } = DateTime.UtcNow;
     public DateTime LastSeen { get; set; } = DateTime.UtcNow;
+    public DateTime? LastActiveAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

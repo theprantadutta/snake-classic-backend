@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./firebase-admin-sdk.json:/app/firebase-admin-sdk.json:ro
+      - ./src/SnakeClassic.Api/firebase-admin-sdk.json:/app/firebase-admin-sdk.json:ro
       - ./logs:/app/logs
     restart: unless-stopped
     networks:

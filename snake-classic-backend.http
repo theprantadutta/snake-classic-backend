@@ -1,6 +1,0 @@
-@snake_classic_backend_HostAddress = http://localhost:5207
-
-GET {{snake_classic_backend_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

@@ -1,0 +1,7 @@
+﻿services:
+  snake-classic-backend:
+    image: snake-classic-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+

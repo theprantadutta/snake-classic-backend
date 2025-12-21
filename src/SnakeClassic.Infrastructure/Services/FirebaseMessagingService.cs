@@ -1,4 +1,7 @@
+using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
+using Google.Apis.Auth.OAuth2;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SnakeClassic.Application.Common.Interfaces;
 
@@ -8,9 +11,31 @@ public class FirebaseMessagingService : IFirebaseMessagingService
 {
     private readonly ILogger<FirebaseMessagingService> _logger;
 
-    public FirebaseMessagingService(ILogger<FirebaseMessagingService> logger)
+    public FirebaseMessagingService(IConfiguration configuration, ILogger<FirebaseMessagingService> logger)
     {
         _logger = logger;
+
+        // Ensure Firebase is initialized
+        if (FirebaseApp.DefaultInstance == null)
+        {
+            var credentialsPath = configuration["Firebase:CredentialsPath"]
+                ?? Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS")
+                ?? "firebase-admin-sdk.json";
+
+            try
+            {
+                FirebaseApp.Create(new AppOptions
+                {
+                    Credential = GoogleCredential.FromFile(credentialsPath)
+                });
+                _logger.LogInformation("Firebase Admin SDK initialized by FirebaseMessagingService");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to initialize Firebase Admin SDK from path: {Path}", credentialsPath);
+                throw;
+            }
+        }
     }
 
     public async Task<string> SendToTokenAsync(NotificationPayload payload, string token)

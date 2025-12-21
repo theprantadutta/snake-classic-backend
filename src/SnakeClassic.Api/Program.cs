@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hangfire;
+using Hangfire.Dashboard;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -224,7 +225,7 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
-    // OpenAPI, Scalar UI, and Hangfire Dashboard (only in Development)
+    // OpenAPI and Scalar UI (only in Development)
     if (app.Environment.IsDevelopment())
     {
         app.MapOpenApi();
@@ -232,12 +233,19 @@ try
         {
             options.WithTheme(ScalarTheme.Mars).WithTitle("Snake Classic API");
         });
-
-        app.UseHangfireDashboard("/hangfire", new DashboardOptions
-        {
-            Authorization = new[] { new HangfireAuthorizationFilter() }
-        });
     }
+
+    // Hangfire Dashboard (available in all environments with auth in production)
+    var hangfireUsername = Environment.GetEnvironmentVariable("HANGFIRE_USERNAME") ?? "admin";
+    var hangfirePassword = Environment.GetEnvironmentVariable("HANGFIRE_PASSWORD") ?? "admin";
+
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = new[] { new HangfireAuthorizationFilter(
+            app.Environment.IsDevelopment(),
+            hangfireUsername,
+            hangfirePassword) }
+    });
 
     // Map controllers and SignalR hub
     app.MapControllers();
@@ -272,13 +280,57 @@ finally
     Log.CloseAndFlush();
 }
 
-// Hangfire authorization filter for dashboard
+// Hangfire authorization filter for dashboard with Basic Auth
 public class HangfireAuthorizationFilter : Hangfire.Dashboard.IDashboardAuthorizationFilter
 {
+    private readonly bool _isDevelopment;
+    private readonly string _username;
+    private readonly string _password;
+
+    public HangfireAuthorizationFilter(bool isDevelopment, string username, string password)
+    {
+        _isDevelopment = isDevelopment;
+        _username = username;
+        _password = password;
+    }
+
     public bool Authorize(Hangfire.Dashboard.DashboardContext context)
     {
-        // In development, allow all access
-        // In production, you should implement proper authorization
-        return true;
+        // In development, allow all access without auth
+        if (_isDevelopment)
+            return true;
+
+        // In production, require Basic Auth
+        var httpContext = context.GetHttpContext();
+        var authHeader = httpContext.Request.Headers["Authorization"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Basic "))
+        {
+            SetUnauthorizedResponse(httpContext);
+            return false;
+        }
+
+        try
+        {
+            var encodedCredentials = authHeader.Substring("Basic ".Length).Trim();
+            var credentials = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encodedCredentials));
+            var parts = credentials.Split(':', 2);
+
+            if (parts.Length == 2 && parts[0] == _username && parts[1] == _password)
+                return true;
+        }
+        catch
+        {
+            // Invalid base64 or other error
+        }
+
+        SetUnauthorizedResponse(httpContext);
+        return false;
+    }
+
+    private static void SetUnauthorizedResponse(HttpContext httpContext)
+    {
+        httpContext.Response.StatusCode = 401;
+        httpContext.Response.Headers["WWW-Authenticate"] = "Basic realm=\"Hangfire Dashboard\"";
     }
 }

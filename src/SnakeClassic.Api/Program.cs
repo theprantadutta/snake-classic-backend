@@ -13,9 +13,16 @@ using SnakeClassic.Application;
 using SnakeClassic.Application.Common.Interfaces;
 using SnakeClassic.Infrastructure;
 
-// Load .env file if it exists
-var envFilePath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-if (File.Exists(envFilePath))
+// Load .env file if it exists (check multiple locations)
+var possibleEnvPaths = new[]
+{
+    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env"),
+    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".env"),
+};
+
+var envFilePath = possibleEnvPaths.FirstOrDefault(File.Exists);
+if (envFilePath != null)
 {
     foreach (var line in File.ReadAllLines(envFilePath))
     {

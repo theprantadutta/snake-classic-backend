@@ -30,7 +30,7 @@ public class BattlePassController : BaseApiController
     [Authorize]
     public async Task<ActionResult> AddXp([FromBody] AddXpRequest request)
     {
-        var result = await Mediator.Send(new AddBattlePassXpCommand(request.XpAmount));
+        var result = await Mediator.Send(new AddBattlePassXpCommand(request.Xp));
         return HandleResult(result);
     }
 
@@ -38,7 +38,8 @@ public class BattlePassController : BaseApiController
     [Authorize]
     public async Task<ActionResult> ClaimReward([FromBody] ClaimBattlePassRewardRequest request)
     {
-        var result = await Mediator.Send(new ClaimBattlePassRewardCommand(request.Level, request.IsPremium));
+        var isPremium = request.Tier?.ToLower() == "premium";
+        var result = await Mediator.Send(new ClaimBattlePassRewardCommand(request.Level, isPremium));
         return HandleResult(result);
     }
 
@@ -51,5 +52,5 @@ public class BattlePassController : BaseApiController
     }
 }
 
-public record AddXpRequest(int XpAmount);
-public record ClaimBattlePassRewardRequest(int Level, bool IsPremium);
+public record AddXpRequest(int Xp);
+public record ClaimBattlePassRewardRequest(int Level, string? Tier);

@@ -12,10 +12,10 @@ public class PurchasesController : BaseApiController
     public async Task<ActionResult> VerifyPurchase([FromBody] VerifyPurchaseRequest request)
     {
         var command = new VerifyPurchaseCommand(
-            request.ProductId,
-            request.TransactionId,
+            request.PurchaseData.ProductId,
+            request.PurchaseData.TransactionId,
             request.Platform,
-            request.ReceiptData
+            request.PurchaseData.ReceiptData
         );
         var result = await Mediator.Send(command);
         return HandleResult(result);
@@ -55,11 +55,15 @@ public class PurchasesController : BaseApiController
     }
 }
 
-public record VerifyPurchaseRequest(
+public record PurchaseData(
     string ProductId,
     string TransactionId,
-    string Platform,
     string? ReceiptData
+);
+
+public record VerifyPurchaseRequest(
+    PurchaseData PurchaseData,
+    string Platform
 );
 
 public record RestorePurchasesRequest(string Platform, string? ReceiptData);

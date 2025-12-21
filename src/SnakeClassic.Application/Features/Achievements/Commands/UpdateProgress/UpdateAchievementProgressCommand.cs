@@ -6,5 +6,5 @@ namespace SnakeClassic.Application.Features.Achievements.Commands.UpdateProgress
 
 public record UpdateAchievementProgressCommand(
     string AchievementId,
-    int Progress
+    int ProgressIncrement
 ) : IRequest<Result<UpdateProgressResultDto>>;

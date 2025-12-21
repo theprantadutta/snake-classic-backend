@@ -70,7 +70,7 @@ public class UsersController : BaseApiController
     public async Task<ActionResult> RegisterFcmToken([FromBody] RegisterTokenRequest request)
     {
         var command = new RegisterFcmTokenCommand(
-            request.Token,
+            request.FcmToken,
             request.Platform,
             request.SubscribedTopics
         );
@@ -95,4 +95,4 @@ public record PreferencesRequest(
 
 public record CheckUsernameRequest(string Username);
 public record SetUsernameRequest(string Username);
-public record RegisterTokenRequest(string Token, string Platform, List<string>? SubscribedTopics);
+public record RegisterTokenRequest(string FcmToken, string Platform, List<string>? SubscribedTopics);

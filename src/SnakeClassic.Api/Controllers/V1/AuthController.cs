@@ -11,7 +11,7 @@ public class AuthController : BaseApiController
     [AllowAnonymous]
     public async Task<ActionResult> AuthenticateWithFirebase([FromBody] AuthenticateRequest request)
     {
-        var result = await Mediator.Send(new AuthenticateWithFirebaseCommand(request.IdToken));
+        var result = await Mediator.Send(new AuthenticateWithFirebaseCommand(request.FirebaseToken));
         return HandleResult(result);
     }
 
@@ -41,4 +41,4 @@ public class AuthController : BaseApiController
     }
 }
 
-public record AuthenticateRequest(string IdToken);
+public record AuthenticateRequest(string FirebaseToken);

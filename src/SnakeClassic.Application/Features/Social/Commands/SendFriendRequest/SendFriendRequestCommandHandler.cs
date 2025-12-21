@@ -30,13 +30,35 @@ public class SendFriendRequestCommandHandler
 
         var userId = _currentUser.UserId.Value;
 
-        if (userId == request.FriendId)
+        // Resolve friend ID from either FriendUserId or FriendUsername
+        Guid friendId;
+        if (request.FriendUserId.HasValue)
+        {
+            friendId = request.FriendUserId.Value;
+        }
+        else if (!string.IsNullOrWhiteSpace(request.FriendUsername))
+        {
+            var friend = await _context.Users
+                .FirstOrDefaultAsync(u => u.Username != null &&
+                    u.Username.ToLower() == request.FriendUsername.ToLower(), cancellationToken);
+            if (friend == null)
+            {
+                return Result<SendFriendRequestResultDto>.NotFound("User not found");
+            }
+            friendId = friend.Id;
+        }
+        else
+        {
+            return Result<SendFriendRequestResultDto>.Failure("Either friend_user_id or friend_username must be provided");
+        }
+
+        if (userId == friendId)
         {
             return Result<SendFriendRequestResultDto>.Failure("Cannot send friend request to yourself");
         }
 
         // Check if friend exists
-        var friendExists = await _context.Users.AnyAsync(u => u.Id == request.FriendId, cancellationToken);
+        var friendExists = await _context.Users.AnyAsync(u => u.Id == friendId, cancellationToken);
         if (!friendExists)
         {
             return Result<SendFriendRequestResultDto>.NotFound("User not found");
@@ -45,8 +67,8 @@ public class SendFriendRequestCommandHandler
         // Check for existing friendship
         var existingFriendship = await _context.Friendships
             .FirstOrDefaultAsync(f =>
-                (f.UserId == userId && f.FriendId == request.FriendId) ||
-                (f.UserId == request.FriendId && f.FriendId == userId), cancellationToken);
+                (f.UserId == userId && f.FriendId == friendId) ||
+                (f.UserId == friendId && f.FriendId == userId), cancellationToken);
 
         if (existingFriendship != null)
         {
@@ -62,7 +84,7 @@ public class SendFriendRequestCommandHandler
         var friendship = new Friendship
         {
             UserId = userId,
-            FriendId = request.FriendId,
+            FriendId = friendId,
             Status = FriendshipStatus.Pending
         };
 

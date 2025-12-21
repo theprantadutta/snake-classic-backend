@@ -12,14 +12,14 @@ public class NotificationsController : BaseApiController
     [HttpPost("topics/subscribe")]
     public async Task<ActionResult> SubscribeToTopic([FromBody] TopicSubscriptionRequest request)
     {
-        var result = await Mediator.Send(new SubscribeToTopicCommand(request.Token, request.Topic));
+        var result = await Mediator.Send(new SubscribeToTopicCommand(request.FcmToken, request.Topic));
         return HandleResult(result);
     }
 
     [HttpPost("topics/unsubscribe")]
     public async Task<ActionResult> UnsubscribeFromTopic([FromBody] TopicSubscriptionRequest request)
     {
-        var result = await Mediator.Send(new UnsubscribeFromTopicCommand(request.Token, request.Topic));
+        var result = await Mediator.Send(new UnsubscribeFromTopicCommand(request.FcmToken, request.Topic));
         return HandleResult(result);
     }
 
@@ -58,7 +58,7 @@ public class NotificationsController : BaseApiController
     }
 }
 
-public record TopicSubscriptionRequest(string Token, string Topic);
+public record TopicSubscriptionRequest(string FcmToken, string Topic);
 
 public record SendIndividualNotificationRequest(
     Guid UserId,

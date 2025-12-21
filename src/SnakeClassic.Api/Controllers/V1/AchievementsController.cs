@@ -31,7 +31,7 @@ public class AchievementsController : BaseApiController
     {
         var result = await Mediator.Send(new UpdateAchievementProgressCommand(
             request.AchievementId,
-            request.Progress
+            request.ProgressIncrement
         ));
         return HandleResult(result);
     }
@@ -45,5 +45,5 @@ public class AchievementsController : BaseApiController
     }
 }
 
-public record UpdateProgressRequest(string AchievementId, int Progress);
+public record UpdateProgressRequest(string AchievementId, int ProgressIncrement);
 public record ClaimRewardRequest(string AchievementId);

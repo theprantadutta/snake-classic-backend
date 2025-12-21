@@ -50,16 +50,16 @@ public class UpdateAchievementProgressCommandHandler
 
         if (userAchievement == null)
         {
+            var newProgress = Math.Min(request.ProgressIncrement, achievement.RequirementValue);
             userAchievement = new UserAchievement
             {
                 UserId = _currentUser.UserId.Value,
                 AchievementId = achievement.Id,
-                CurrentProgress = request.Progress
+                CurrentProgress = newProgress
             };
 
-            if (request.Progress >= achievement.RequirementValue)
+            if (newProgress >= achievement.RequirementValue)
             {
-                userAchievement.CurrentProgress = achievement.RequirementValue;
                 userAchievement.IsUnlocked = true;
                 userAchievement.UnlockedAt = _dateTime.UtcNow;
                 newlyUnlocked = true;
@@ -69,7 +69,10 @@ public class UpdateAchievementProgressCommandHandler
         }
         else if (!userAchievement.IsUnlocked)
         {
-            userAchievement.CurrentProgress = Math.Min(request.Progress, achievement.RequirementValue);
+            // Increment the progress
+            userAchievement.CurrentProgress = Math.Min(
+                userAchievement.CurrentProgress + request.ProgressIncrement,
+                achievement.RequirementValue);
 
             if (userAchievement.CurrentProgress >= achievement.RequirementValue)
             {

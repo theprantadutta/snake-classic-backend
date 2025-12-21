@@ -29,25 +29,25 @@ public class SocialController : BaseApiController
     [HttpPost("friends/request")]
     public async Task<ActionResult> SendFriendRequest([FromBody] SendFriendRequestDto request)
     {
-        var result = await Mediator.Send(new SendFriendRequestCommand(request.FriendId));
+        var result = await Mediator.Send(new SendFriendRequestCommand(request.FriendUserId, request.FriendUsername));
         return HandleResult(result);
     }
 
-    [HttpPost("accept/{requestId:guid}")]
+    [HttpPost("friends/accept/{requestId:guid}")]
     public async Task<ActionResult> AcceptFriendRequest(Guid requestId)
     {
         var result = await Mediator.Send(new AcceptFriendRequestCommand(requestId));
         return HandleResult(result);
     }
 
-    [HttpPost("reject/{requestId:guid}")]
+    [HttpPost("friends/reject/{requestId:guid}")]
     public async Task<ActionResult> RejectFriendRequest(Guid requestId)
     {
         var result = await Mediator.Send(new RejectFriendRequestCommand(requestId));
         return HandleResult(result);
     }
 
-    [HttpDelete("{friendId:guid}")]
+    [HttpDelete("friends/{friendId:guid}")]
     public async Task<ActionResult> RemoveFriend(Guid friendId)
     {
         var result = await Mediator.Send(new RemoveFriendCommand(friendId));
@@ -55,4 +55,4 @@ public class SocialController : BaseApiController
     }
 }
 
-public record SendFriendRequestDto(Guid FriendId);
+public record SendFriendRequestDto(Guid? FriendUserId, string? FriendUsername);

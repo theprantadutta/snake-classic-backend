@@ -5,17 +5,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8393:8393"
     env_file:
       - .env
     volumes:
       - ./firebase-admin-sdk.json:/app/firebase-admin-sdk.json:ro
       - ./logs:/app/logs
     restart: unless-stopped
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.snakeclassic.rule=Host(`snakeclassic.pranta.dev`)"
+      - "traefik.http.routers.snakeclassic.entrypoints=websecure"
+      - "traefik.http.routers.snakeclassic.tls.certresolver=letsencrypt"
+      - "traefik.http.services.snakeclassic.loadbalancer.server.port=8393"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8393/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+networks:
+  proxy:
+    external: true

@@ -4,4 +4,4 @@ using SnakeClassic.Application.Features.Social.DTOs;
 
 namespace SnakeClassic.Application.Features.Social.Queries.GetFriendRequests;
 
-public record GetFriendRequestsQuery : IRequest<Result<List<FriendRequestDto>>>;
+public record GetFriendRequestsQuery : IRequest<Result<FriendRequestsResponseDto>>;

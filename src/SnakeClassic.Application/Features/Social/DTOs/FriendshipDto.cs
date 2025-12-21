@@ -21,3 +21,11 @@ public record FriendRequestDto(
     string? FromPhotoUrl,
     DateTime SentAt
 );
+
+public record FriendsResponseDto(
+    List<FriendDto> Friends
+);
+
+public record FriendRequestsResponseDto(
+    List<FriendRequestDto> Requests
+);

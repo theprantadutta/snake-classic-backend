@@ -7,7 +7,7 @@ using SnakeClassic.Domain.Enums;
 
 namespace SnakeClassic.Application.Features.Social.Queries.GetFriends;
 
-public class GetFriendsQueryHandler : IRequestHandler<GetFriendsQuery, Result<List<FriendDto>>>
+public class GetFriendsQueryHandler : IRequestHandler<GetFriendsQuery, Result<FriendsResponseDto>>
 {
     private readonly IAppDbContext _context;
     private readonly ICurrentUserService _currentUser;
@@ -18,11 +18,11 @@ public class GetFriendsQueryHandler : IRequestHandler<GetFriendsQuery, Result<Li
         _currentUser = currentUser;
     }
 
-    public async Task<Result<List<FriendDto>>> Handle(GetFriendsQuery request, CancellationToken cancellationToken)
+    public async Task<Result<FriendsResponseDto>> Handle(GetFriendsQuery request, CancellationToken cancellationToken)
     {
         if (!_currentUser.IsAuthenticated || !_currentUser.UserId.HasValue)
         {
-            return Result<List<FriendDto>>.Unauthorized();
+            return Result<FriendsResponseDto>.Unauthorized();
         }
 
         var userId = _currentUser.UserId.Value;
@@ -50,6 +50,6 @@ public class GetFriendsQueryHandler : IRequestHandler<GetFriendsQuery, Result<Li
             );
         }).OrderBy(f => f.DisplayName ?? f.Username).ToList();
 
-        return Result<List<FriendDto>>.Success(friends);
+        return Result<FriendsResponseDto>.Success(new FriendsResponseDto(friends));
     }
 }

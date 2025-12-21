@@ -21,28 +21,25 @@ public class GetGlobalLeaderboardQueryHandler : IRequestHandler<GetGlobalLeaderb
     {
         var totalPlayers = await _context.Users.CountAsync(cancellationToken);
 
-        var entries = await _context.Users
+        // Fetch users from database first
+        var users = await _context.Users
             .AsNoTracking()
             .OrderByDescending(u => u.HighScore)
             .Skip(request.Offset)
             .Take(request.Limit)
-            .Select((u, index) => new LeaderboardEntryDto(
-                request.Offset + index + 1,
-                u.Id,
-                u.Username,
-                u.DisplayName,
-                u.PhotoUrl,
-                u.HighScore,
-                u.Level,
-                null
-            ))
             .ToListAsync(cancellationToken);
 
-        // Fix rank assignment (EF Core doesn't support index in Select properly)
-        for (int i = 0; i < entries.Count; i++)
-        {
-            entries[i] = entries[i] with { Rank = request.Offset + i + 1 };
-        }
+        // Project to DTO in memory with rank calculation
+        var entries = users.Select((u, index) => new LeaderboardEntryDto(
+            request.Offset + index + 1,
+            u.Id,
+            u.Username,
+            u.DisplayName,
+            u.PhotoUrl,
+            u.HighScore,
+            u.Level,
+            null
+        )).ToList();
 
         int? currentUserRank = null;
         if (_currentUser.IsAuthenticated && _currentUser.UserId.HasValue)

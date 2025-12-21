@@ -7,7 +7,7 @@ using SnakeClassic.Domain.Enums;
 
 namespace SnakeClassic.Application.Features.Tournaments.Queries.GetTournaments;
 
-public class GetTournamentsQueryHandler : IRequestHandler<GetTournamentsQuery, Result<List<TournamentDto>>>
+public class GetTournamentsQueryHandler : IRequestHandler<GetTournamentsQuery, Result<TournamentsResponseDto>>
 {
     private readonly IAppDbContext _context;
     private readonly ICurrentUserService _currentUser;
@@ -18,7 +18,7 @@ public class GetTournamentsQueryHandler : IRequestHandler<GetTournamentsQuery, R
         _currentUser = currentUser;
     }
 
-    public async Task<Result<List<TournamentDto>>> Handle(GetTournamentsQuery request, CancellationToken cancellationToken)
+    public async Task<Result<TournamentsResponseDto>> Handle(GetTournamentsQuery request, CancellationToken cancellationToken)
     {
         var query = _context.Tournaments.AsNoTracking();
 
@@ -57,6 +57,6 @@ public class GetTournamentsQueryHandler : IRequestHandler<GetTournamentsQuery, R
             joinedTournamentIds.Contains(t.Id)
         )).ToList();
 
-        return Result<List<TournamentDto>>.Success(result);
+        return Result<TournamentsResponseDto>.Success(new TournamentsResponseDto(result));
     }
 }

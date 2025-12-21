@@ -33,3 +33,7 @@ public record TournamentLeaderboardDto(
     List<TournamentEntryDto> Entries,
     int? CurrentUserRank
 );
+
+public record TournamentsResponseDto(
+    List<TournamentDto> Tournaments
+);

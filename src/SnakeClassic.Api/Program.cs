@@ -224,16 +224,15 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
-    // OpenAPI and Scalar UI
-    app.MapOpenApi();
-    app.MapScalarApiReference(options =>
-    {
-        options.WithTheme(ScalarTheme.Mars).WithTitle("Snake Classic API");
-    });
-
-    // Hangfire Dashboard (only in Development)
+    // OpenAPI, Scalar UI, and Hangfire Dashboard (only in Development)
     if (app.Environment.IsDevelopment())
     {
+        app.MapOpenApi();
+        app.MapScalarApiReference(options =>
+        {
+            options.WithTheme(ScalarTheme.Mars).WithTitle("Snake Classic API");
+        });
+
         app.UseHangfireDashboard("/hangfire", new DashboardOptions
         {
             Authorization = new[] { new HangfireAuthorizationFilter() }
@@ -252,8 +251,10 @@ try
         version = "1.0.0"
     }));
 
-    // Root redirect to Scalar
-    app.MapGet("/", () => Results.Redirect("/scalar/v1"));
+    // Root endpoint
+    app.MapGet("/", (IWebHostEnvironment env) => env.IsDevelopment()
+        ? Results.Redirect("/scalar/v1")
+        : Results.Ok(new { name = "Snake Classic API", version = "1.0.0", status = "running" }));
 
     var port = Environment.GetEnvironmentVariable("API_PORT") ?? "8393";
     app.Urls.Add($"http://0.0.0.0:{port}");

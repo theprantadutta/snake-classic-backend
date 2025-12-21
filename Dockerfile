@@ -1,23 +1,39 @@
-﻿FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
-USER $APP_UID
+# Snake Classic Backend - .NET 10 Clean Architecture
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS base
 WORKDIR /app
-EXPOSE 8080
-EXPOSE 8081
+EXPOSE 8393
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["snake-classic-backend.csproj", "./"]
-RUN dotnet restore "snake-classic-backend.csproj"
+
+# Copy solution and project files
+COPY ["snake-classic-backend.sln", "./"]
+COPY ["src/SnakeClassic.Domain/SnakeClassic.Domain.csproj", "src/SnakeClassic.Domain/"]
+COPY ["src/SnakeClassic.Application/SnakeClassic.Application.csproj", "src/SnakeClassic.Application/"]
+COPY ["src/SnakeClassic.Infrastructure/SnakeClassic.Infrastructure.csproj", "src/SnakeClassic.Infrastructure/"]
+COPY ["src/SnakeClassic.Api/SnakeClassic.Api.csproj", "src/SnakeClassic.Api/"]
+
+# Restore dependencies
+RUN dotnet restore "snake-classic-backend.sln"
+
+# Copy all source code
 COPY . .
-WORKDIR "/src/"
-RUN dotnet build "./snake-classic-backend.csproj" -c $BUILD_CONFIGURATION -o /app/build
+
+# Build the solution
+WORKDIR "/src/src/SnakeClassic.Api"
+RUN dotnet build "SnakeClassic.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./snake-classic-backend.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "SnakeClassic.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "snake-classic-backend.dll"]
+
+# Set environment variables
+ENV ASPNETCORE_URLS=http://+:8393
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+ENTRYPOINT ["dotnet", "SnakeClassic.Api.dll"]

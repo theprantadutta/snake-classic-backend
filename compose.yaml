@@ -1,7 +1,48 @@
-﻿services:
+services:
   snake-classic-backend:
     image: snake-classic-backend
+    container_name: snake-classic-api
     build:
       context: .
       dockerfile: Dockerfile
+    ports:
+      - "8393:8393"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DATABASE_HOST=${DATABASE_HOST}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_NAME=${DATABASE_NAME:-snake_classic}
+      - DATABASE_USERNAME=${DATABASE_USERNAME}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-snake-classic-2a376}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      - API_PORT=8393
+    volumes:
+      - ./firebase-admin-sdk.json:/app/firebase-admin-sdk.json:ro
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8393/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+  # Optional: Local PostgreSQL for development
+  # Uncomment if you want to run a local database
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: snake-classic-db
+  #   environment:
+  #     - POSTGRES_USER=${DATABASE_USERNAME:-postgres}
+  #     - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+  #     - POSTGRES_DB=${DATABASE_NAME:-snake_classic}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+# volumes:
+#   postgres_data:

@@ -66,7 +66,8 @@ public class SubmitScoreCommandHandler : IRequestHandler<SubmitScoreCommand, Res
             GameMode = gameMode,
             Difficulty = difficulty,
             IdempotencyKey = request.IdempotencyKey,
-            GameData = request.GameData
+            GameData = request.GameData,
+            PlayedAt = request.PlayedAt
         };
 
         _context.Scores.Add(score);

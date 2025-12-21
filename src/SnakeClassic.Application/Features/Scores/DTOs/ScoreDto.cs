@@ -19,7 +19,8 @@ public record ScoreSubmitDto(
     string GameMode,
     string Difficulty,
     string? IdempotencyKey,
-    Dictionary<string, object>? GameData
+    Dictionary<string, object>? GameData,
+    DateTime? PlayedAt
 );
 
 public record UserStatsDto(
@@ -33,8 +34,12 @@ public record UserStatsDto(
     int BestStreak
 );
 
+public record BatchScoreItemResultDto(
+    bool Success,
+    bool WasDuplicate,
+    string? Error
+);
+
 public record BatchScoreResultDto(
-    int Processed,
-    int Skipped,
-    List<string> SkippedKeys
+    List<BatchScoreItemResultDto> Results
 );

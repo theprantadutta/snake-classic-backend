@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SnakeClassic.Application.Features.Achievements.Commands.ClaimReward;
+using SnakeClassic.Application.Features.Achievements.Commands.SeedAchievements;
 using SnakeClassic.Application.Features.Achievements.Commands.UpdateProgress;
 using SnakeClassic.Application.Features.Achievements.Queries.GetAchievements;
 using SnakeClassic.Application.Features.Achievements.Queries.GetUserAchievements;
@@ -41,6 +42,14 @@ public class AchievementsController : BaseApiController
     public async Task<ActionResult> ClaimReward([FromBody] ClaimRewardRequest request)
     {
         var result = await Mediator.Send(new ClaimAchievementRewardCommand(request.AchievementId));
+        return HandleResult(result);
+    }
+
+    [HttpPost("seed")]
+    [AllowAnonymous]
+    public async Task<ActionResult> SeedAchievements()
+    {
+        var result = await Mediator.Send(new SeedAchievementsCommand());
         return HandleResult(result);
     }
 }

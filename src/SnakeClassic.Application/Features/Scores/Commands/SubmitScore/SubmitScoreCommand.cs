@@ -11,5 +11,6 @@ public record SubmitScoreCommand(
     string GameMode,
     string Difficulty,
     string? IdempotencyKey,
-    Dictionary<string, object>? GameData
+    Dictionary<string, object>? GameData,
+    DateTime? PlayedAt
 ) : IRequest<Result<ScoreDto>>;

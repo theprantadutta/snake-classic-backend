@@ -23,6 +23,7 @@ public interface IAppDbContext
     DbSet<Purchase> Purchases { get; }
     DbSet<NotificationHistory> NotificationHistories { get; }
     DbSet<ScheduledJob> ScheduledJobs { get; }
+    DbSet<DailyLoginBonus> DailyLoginBonuses { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

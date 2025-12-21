@@ -2,7 +2,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hangfire;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
@@ -11,6 +13,7 @@ using SnakeClassic.Api.Hubs;
 using SnakeClassic.Api.Services;
 using SnakeClassic.Application;
 using SnakeClassic.Application.Common.Interfaces;
+using SnakeClassic.Application.Features.Achievements.Commands.SeedAchievements;
 using SnakeClassic.Infrastructure;
 
 // Load .env file if it exists (check multiple locations)
@@ -168,6 +171,21 @@ try
     });
 
     var app = builder.Build();
+
+    // Seed achievements on startup if needed
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<IAppDbContext>();
+        var hasAchievements = await context.Achievements.AnyAsync();
+
+        if (!hasAchievements)
+        {
+            Log.Information("Seeding achievements...");
+            var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+            var result = await mediator.Send(new SeedAchievementsCommand());
+            Log.Information("Seeded {Count} achievements", result.Value?.Total ?? 0);
+        }
+    }
 
     // Configure the HTTP request pipeline
 

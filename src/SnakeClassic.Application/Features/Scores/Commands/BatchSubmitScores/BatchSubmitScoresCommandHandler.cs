@@ -26,8 +26,7 @@ public class BatchSubmitScoresCommandHandler : IRequestHandler<BatchSubmitScores
             return Result<BatchScoreResultDto>.Unauthorized();
         }
 
-        var processed = 0;
-        var skippedKeys = new List<string>();
+        var results = new List<BatchScoreItemResultDto>();
 
         // Get existing idempotency keys
         var existingKeys = await _context.Scores
@@ -40,42 +39,56 @@ public class BatchSubmitScoresCommandHandler : IRequestHandler<BatchSubmitScores
 
         foreach (var scoreDto in request.Scores)
         {
-            // Check idempotency
-            if (!string.IsNullOrEmpty(scoreDto.IdempotencyKey) && existingKeySet.Contains(scoreDto.IdempotencyKey))
+            try
             {
-                skippedKeys.Add(scoreDto.IdempotencyKey);
-                continue;
+                // Check idempotency - mark as duplicate but still success
+                if (!string.IsNullOrEmpty(scoreDto.IdempotencyKey) && existingKeySet.Contains(scoreDto.IdempotencyKey))
+                {
+                    results.Add(new BatchScoreItemResultDto(true, true, null));
+                    continue;
+                }
+
+                if (!Enum.TryParse<GameMode>(scoreDto.GameMode, true, out var gameMode))
+                {
+                    gameMode = GameMode.Classic;
+                }
+                if (!Enum.TryParse<Difficulty>(scoreDto.Difficulty, true, out var difficulty))
+                {
+                    difficulty = Difficulty.Normal;
+                }
+
+                var score = new Score
+                {
+                    UserId = _currentUser.UserId.Value,
+                    ScoreValue = scoreDto.Score,
+                    GameDurationSeconds = scoreDto.GameDurationSeconds,
+                    FoodsEaten = scoreDto.FoodsEaten,
+                    GameMode = gameMode,
+                    Difficulty = difficulty,
+                    IdempotencyKey = scoreDto.IdempotencyKey,
+                    GameData = scoreDto.GameData,
+                    PlayedAt = scoreDto.PlayedAt
+                };
+
+                _context.Scores.Add(score);
+
+                // Add to existing keys set to prevent duplicates within same batch
+                if (!string.IsNullOrEmpty(scoreDto.IdempotencyKey))
+                {
+                    existingKeySet.Add(scoreDto.IdempotencyKey);
+                }
+
+                if (scoreDto.Score > highestScore)
+                {
+                    highestScore = scoreDto.Score;
+                }
+
+                results.Add(new BatchScoreItemResultDto(true, false, null));
             }
-
-            if (!Enum.TryParse<GameMode>(scoreDto.GameMode, true, out var gameMode))
+            catch (Exception ex)
             {
-                gameMode = GameMode.Classic;
+                results.Add(new BatchScoreItemResultDto(false, false, ex.Message));
             }
-            if (!Enum.TryParse<Difficulty>(scoreDto.Difficulty, true, out var difficulty))
-            {
-                difficulty = Difficulty.Normal;
-            }
-
-            var score = new Score
-            {
-                UserId = _currentUser.UserId.Value,
-                ScoreValue = scoreDto.Score,
-                GameDurationSeconds = scoreDto.GameDurationSeconds,
-                FoodsEaten = scoreDto.FoodsEaten,
-                GameMode = gameMode,
-                Difficulty = difficulty,
-                IdempotencyKey = scoreDto.IdempotencyKey,
-                GameData = scoreDto.GameData
-            };
-
-            _context.Scores.Add(score);
-
-            if (scoreDto.Score > highestScore)
-            {
-                highestScore = scoreDto.Score;
-            }
-
-            processed++;
         }
 
         // Update user's high score if needed
@@ -90,10 +103,6 @@ public class BatchSubmitScoresCommandHandler : IRequestHandler<BatchSubmitScores
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        return Result<BatchScoreResultDto>.Success(new BatchScoreResultDto(
-            processed,
-            skippedKeys.Count,
-            skippedKeys
-        ));
+        return Result<BatchScoreResultDto>.Success(new BatchScoreResultDto(results));
     }
 }

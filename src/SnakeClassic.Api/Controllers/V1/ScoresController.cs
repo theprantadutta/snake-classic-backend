@@ -21,7 +21,8 @@ public class ScoresController : BaseApiController
             request.GameMode,
             request.Difficulty,
             request.IdempotencyKey,
-            request.GameData
+            request.GameData,
+            request.PlayedAt
         );
         var result = await Mediator.Send(command);
         return HandleResult(result);
@@ -51,7 +52,8 @@ public class ScoresController : BaseApiController
             s.GameMode,
             s.Difficulty,
             s.IdempotencyKey,
-            s.GameData
+            s.GameData,
+            s.PlayedAt
         )).ToList();
 
         var result = await Mediator.Send(new BatchSubmitScoresCommand(scores));
@@ -66,7 +68,8 @@ public record SubmitScoreRequest(
     string GameMode,
     string Difficulty,
     string? IdempotencyKey,
-    Dictionary<string, object>? GameData
+    Dictionary<string, object>? GameData,
+    DateTime? PlayedAt
 );
 
 public record BatchSubmitScoresRequest(List<SubmitScoreRequest> Scores);

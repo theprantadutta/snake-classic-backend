@@ -308,7 +308,46 @@ static void ConfigureRecurringJobs()
         "0 14 * * *", // Cron: minute=0, hour=14, every day
         new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
 
-    Log.Information("Hangfire recurring jobs configured successfully");
+    // ============================================
+    // TOURNAMENT MANAGEMENT JOBS
+    // ============================================
+
+    // Create daily tournament - runs at midnight UTC every day
+    RecurringJob.AddOrUpdate<ITournamentManagementJobService>(
+        "create-daily-tournament",
+        service => service.CreateDailyTournament(),
+        "0 0 * * *", // Cron: midnight UTC every day
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // Create weekly tournament - runs every Monday at midnight UTC
+    RecurringJob.AddOrUpdate<ITournamentManagementJobService>(
+        "create-weekly-tournament",
+        service => service.CreateWeeklyTournament(),
+        "0 0 * * 1", // Cron: midnight UTC every Monday
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // Create monthly tournament - runs on the 1st of each month at midnight UTC
+    RecurringJob.AddOrUpdate<ITournamentManagementJobService>(
+        "create-monthly-tournament",
+        service => service.CreateMonthlyTournament(),
+        "0 0 1 * *", // Cron: midnight UTC on 1st of month
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // Process tournament lifecycle (status transitions) - runs every 5 minutes
+    RecurringJob.AddOrUpdate<ITournamentManagementJobService>(
+        "process-tournament-lifecycle",
+        service => service.ProcessTournamentLifecycle(),
+        "*/5 * * * *", // Cron: every 5 minutes
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // Distribute tournament prizes - runs every 15 minutes
+    RecurringJob.AddOrUpdate<ITournamentManagementJobService>(
+        "distribute-tournament-prizes",
+        service => service.DistributeTournamentPrizes(),
+        "*/15 * * * *", // Cron: every 15 minutes
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    Log.Information("Hangfire recurring jobs configured successfully (including tournament management)");
 }
 
 // Hangfire authorization filter for dashboard with Basic Auth

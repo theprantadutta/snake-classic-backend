@@ -60,6 +60,7 @@ public static class DependencyInjection
 
         // Background job services
         services.AddScoped<INotificationJobService, NotificationJobService>();
+        services.AddScoped<ITournamentManagementJobService, TournamentManagementJobService>();
 
         return services;
     }

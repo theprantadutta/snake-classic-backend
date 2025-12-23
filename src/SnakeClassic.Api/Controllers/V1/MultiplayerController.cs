@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SnakeClassic.Api.Services;
 using SnakeClassic.Application.Common.Interfaces;
 using SnakeClassic.Application.Features.Multiplayer.Commands.CreateGame;
 using SnakeClassic.Application.Features.Multiplayer.Commands.JoinGame;
@@ -15,10 +16,12 @@ namespace SnakeClassic.Api.Controllers.V1;
 public class MultiplayerController : BaseApiController
 {
     private readonly IAppDbContext _context;
+    private readonly IMatchmakingJobService _matchmakingJobService;
 
-    public MultiplayerController(IAppDbContext context)
+    public MultiplayerController(IAppDbContext context, IMatchmakingJobService matchmakingJobService)
     {
         _context = context;
+        _matchmakingJobService = matchmakingJobService;
     }
     [HttpPost("create")]
     public async Task<ActionResult> CreateGame([FromBody] CreateGameRequest request)
@@ -85,6 +88,46 @@ public class MultiplayerController : BaseApiController
             .ToListAsync();
 
         return Ok(games);
+    }
+
+    /// <summary>
+    /// DEBUG: Get matchmaking queue status
+    /// </summary>
+    [HttpGet("debug/queue")]
+    public async Task<ActionResult> GetQueueStatus()
+    {
+        var queue = await _context.MatchmakingQueues
+            .Include(q => q.User)
+            .Where(q => !q.IsMatched)
+            .OrderBy(q => q.QueuedAt)
+            .Select(q => new
+            {
+                q.Id,
+                q.UserId,
+                Username = q.User.Username ?? q.User.DisplayName,
+                Mode = q.Mode.ToString(),
+                q.DesiredPlayers,
+                q.QueuedAt,
+                q.IsMatched,
+                q.ConnectionId
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            TotalInQueue = queue.Count,
+            Players = queue
+        });
+    }
+
+    /// <summary>
+    /// DEBUG: Manually trigger matchmaking
+    /// </summary>
+    [HttpPost("debug/process-matchmaking")]
+    public async Task<ActionResult> TriggerMatchmaking()
+    {
+        await _matchmakingJobService.ProcessMatchmakingQueue();
+        return Ok(new { Message = "Matchmaking processed manually" });
     }
 }
 

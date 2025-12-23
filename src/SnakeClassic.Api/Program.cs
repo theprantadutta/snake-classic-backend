@@ -294,10 +294,15 @@ static void ConfigureRecurringJobs()
     try
     {
         ConfigureRecurringJobsInternal();
+        Log.Information("Hangfire recurring jobs configured successfully");
     }
     catch (Hangfire.PostgreSql.PostgreSqlDistributedLockException ex)
     {
-        Log.Warning(ex, "Failed to acquire lock for recurring jobs (stale lock?). Jobs will be configured on next restart.");
+        Log.Warning(ex, "Failed to acquire Hangfire lock. Run this SQL to clear stale locks: DELETE FROM snake_classic_hangfire.lock;");
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Failed to configure Hangfire recurring jobs");
     }
 }
 

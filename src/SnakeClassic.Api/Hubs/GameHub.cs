@@ -131,9 +131,30 @@ public class GameHub : Hub
         existingPlayer.ConnectionId = Context.ConnectionId;
         await _context.SaveChangesAsync(default);
 
+        // Join SignalR group
         await Groups.AddToGroupAsync(Context.ConnectionId, roomCode);
 
-        var playerInfo = new PlayerInfo
+        // IMPORTANT: Send ALL existing players to the newly joined caller
+        // This ensures they get players who joined before them (whose PlayerJoined they missed)
+        foreach (var player in game.Players)
+        {
+            var playerInfo = new PlayerInfo
+            {
+                UserId = player.UserId,
+                Username = player.User.Username ?? player.User.DisplayName ?? "Player",
+                PlayerIndex = player.PlayerIndex,
+                IsReady = player.IsReady,
+                SnakeColor = player.SnakeColor
+            };
+
+            await Clients.Caller.SendAsync("PlayerJoined", playerInfo);
+
+            _logger.LogDebug("Sent existing player {PlayerIndex} ({Username}) to newly joined user {UserId}",
+                player.PlayerIndex, playerInfo.Username, _currentUser.UserId);
+        }
+
+        // Notify OTHERS in the group about the new player (they already have their own info)
+        var newPlayerInfo = new PlayerInfo
         {
             UserId = existingPlayer.UserId,
             Username = existingPlayer.User.Username ?? existingPlayer.User.DisplayName ?? "Player",
@@ -142,9 +163,10 @@ public class GameHub : Hub
             SnakeColor = existingPlayer.SnakeColor
         };
 
-        await Clients.Group(roomCode).SendAsync("PlayerJoined", playerInfo);
+        await Clients.OthersInGroup(roomCode).SendAsync("PlayerJoined", newPlayerInfo);
 
-        _logger.LogInformation("User {UserId} joined room {RoomCode}", _currentUser.UserId, roomCode);
+        _logger.LogInformation("User {UserId} joined room {RoomCode} (sent {PlayerCount} existing players)",
+            _currentUser.UserId, roomCode, game.Players.Count);
     }
 
     #region Matchmaking
@@ -184,6 +206,34 @@ public class GameHub : Hub
 
             _logger.LogInformation("User {UserId} joined matchmaking for {Mode} {PlayerCount}p",
                 _currentUser.UserId, mode, playerCount);
+
+            // Immediately try to create a match
+            var match = await _matchmakingService.TryCreateMatchImmediately(gameMode, playerCount);
+
+            if (match != null)
+            {
+                _logger.LogInformation("Immediate match created: {GameId} for {Mode} {PlayerCount}p",
+                    match.GameId, mode, playerCount);
+
+                // Notify all matched players
+                foreach (var player in match.Players)
+                {
+                    if (!string.IsNullOrEmpty(player.ConnectionId))
+                    {
+                        await Clients.Client(player.ConnectionId).SendAsync("MatchFound", new
+                        {
+                            GameId = match.GameId,
+                            RoomCode = match.RoomCode,
+                            Mode = match.Mode,
+                            PlayerCount = match.PlayerCount,
+                            PlayerIndex = player.PlayerIndex
+                        });
+
+                        _logger.LogInformation("Notified player {UserId} of match {GameId}",
+                            player.UserId, match.GameId);
+                    }
+                }
+            }
         }
         else
         {

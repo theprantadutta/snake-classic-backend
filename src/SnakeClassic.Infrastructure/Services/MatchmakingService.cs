@@ -11,6 +11,7 @@ public interface IMatchmakingService
     Task<MatchmakingResult> JoinQueue(Guid userId, string connectionId, MultiplayerGameMode mode, int playerCount);
     Task LeaveQueue(Guid userId);
     Task<List<MatchCreatedResult>> ProcessMatchmaking();
+    Task<MatchCreatedResult?> TryCreateMatchImmediately(MultiplayerGameMode mode, int playerCount);
     Task CleanupOldQueueEntries();
 }
 
@@ -42,6 +43,9 @@ public class MatchmakingService : IMatchmakingService
 {
     private readonly IAppDbContext _context;
     private readonly ILogger<MatchmakingService> _logger;
+
+    // Lock to prevent race conditions when creating matches
+    private static readonly SemaphoreSlim _matchmakingLock = new(1, 1);
 
     // Player colors for multi-player games
     private static readonly string[] PlayerColors = new[]
@@ -167,6 +171,11 @@ public class MatchmakingService : IMatchmakingService
                 .OrderBy(q => q.QueuedAt)
                 .ToListAsync();
 
+            if (queueGroups.Count > 0)
+            {
+                _logger.LogInformation("Matchmaking queue has {Count} players waiting", queueGroups.Count);
+            }
+
             var groupedQueues = queueGroups
                 .GroupBy(q => new { q.Mode, q.DesiredPlayers })
                 .ToList();
@@ -176,6 +185,9 @@ public class MatchmakingService : IMatchmakingService
                 var mode = group.Key.Mode;
                 var playerCount = group.Key.DesiredPlayers;
                 var waitingPlayers = group.ToList();
+
+                _logger.LogInformation("Queue group {Mode} {PlayerCount}p has {WaitingCount} players (need {Need})",
+                    mode, playerCount, waitingPlayers.Count, playerCount);
 
                 // Check if we have enough players
                 while (waitingPlayers.Count >= playerCount)
@@ -248,6 +260,73 @@ public class MatchmakingService : IMatchmakingService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error cleaning up old queue entries");
+        }
+    }
+
+    /// <summary>
+    /// Try to create a match immediately when a player joins.
+    /// Uses a semaphore to prevent race conditions.
+    /// </summary>
+    public async Task<MatchCreatedResult?> TryCreateMatchImmediately(MultiplayerGameMode mode, int playerCount)
+    {
+        // Acquire lock to prevent race conditions
+        await _matchmakingLock.WaitAsync();
+        try
+        {
+            // Get unmatched players for this mode/count, ordered by queue time
+            var waitingPlayers = await _context.MatchmakingQueues
+                .Include(q => q.User)
+                .Where(q => !q.IsMatched && q.Mode == mode && q.DesiredPlayers == playerCount)
+                .OrderBy(q => q.QueuedAt)
+                .Take(playerCount)
+                .ToListAsync();
+
+            _logger.LogInformation(
+                "TryCreateMatchImmediately: Found {Count} players for {Mode} {PlayerCount}p (need {Need})",
+                waitingPlayers.Count, mode, playerCount, playerCount);
+
+            if (waitingPlayers.Count < playerCount)
+            {
+                return null; // Not enough players yet
+            }
+
+            // Create the match
+            var (game, playerInfos) = await CreateMatchedGame(waitingPlayers, mode, playerCount);
+
+            if (game == null)
+            {
+                return null;
+            }
+
+            // Mark players as matched IMMEDIATELY to prevent other threads from using them
+            foreach (var player in waitingPlayers)
+            {
+                player.IsMatched = true;
+                player.MatchedGameId = game.Id;
+            }
+            await _context.SaveChangesAsync(default);
+
+            _logger.LogInformation(
+                "Match created immediately: {GameId} ({Mode} {PlayerCount}p) with room code {RoomCode}",
+                game.GameId, mode, playerCount, game.RoomCode);
+
+            return new MatchCreatedResult
+            {
+                GameId = game.GameId,
+                RoomCode = game.RoomCode,
+                Mode = game.Mode.ToString(),
+                PlayerCount = game.MaxPlayers,
+                Players = playerInfos
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error trying to create match immediately for {Mode} {PlayerCount}p", mode, playerCount);
+            return null;
+        }
+        finally
+        {
+            _matchmakingLock.Release();
         }
     }
 

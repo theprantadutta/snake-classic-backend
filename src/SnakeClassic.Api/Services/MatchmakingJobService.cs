@@ -29,15 +29,18 @@ public class MatchmakingJobService : IMatchmakingJobService
     {
         try
         {
-            _logger.LogDebug("Processing matchmaking queue...");
-
             // Process matchmaking and get created matches
             var createdMatches = await _matchmakingService.ProcessMatchmaking();
 
-            // Notify players via SignalR for each match
-            foreach (var match in createdMatches)
+            if (createdMatches.Count > 0)
             {
-                await NotifyMatchFound(match);
+                _logger.LogInformation("Matchmaking found {Count} matches", createdMatches.Count);
+
+                // Notify players via SignalR for each match
+                foreach (var match in createdMatches)
+                {
+                    await NotifyMatchFound(match);
+                }
             }
 
             // Cleanup old queue entries

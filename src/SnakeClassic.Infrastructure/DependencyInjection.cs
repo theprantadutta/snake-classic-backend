@@ -3,6 +3,7 @@ using Hangfire.PostgreSql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using SnakeClassic.Application.Common.Interfaces;
 using SnakeClassic.Infrastructure.Persistence;
 using SnakeClassic.Infrastructure.Services;
@@ -17,10 +18,15 @@ public static class DependencyInjection
         // Database connection string from environment or config
         var connectionString = BuildConnectionString(configuration);
 
+        // Create NpgsqlDataSource with dynamic JSON enabled for JSONB columns
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+        dataSourceBuilder.EnableDynamicJson();
+        var dataSource = dataSourceBuilder.Build();
+
         // Entity Framework Core with PostgreSQL
         services.AddDbContext<AppDbContext>(options =>
         {
-            options.UseNpgsql(connectionString, npgsqlOptions =>
+            options.UseNpgsql(dataSource, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
                 npgsqlOptions.EnableRetryOnFailure(3);

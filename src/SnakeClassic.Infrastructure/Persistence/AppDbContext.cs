@@ -29,6 +29,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<NotificationHistory> NotificationHistories => Set<NotificationHistory>();
     public DbSet<ScheduledJob> ScheduledJobs => Set<ScheduledJob>();
     public DbSet<DailyLoginBonus> DailyLoginBonuses => Set<DailyLoginBonus>();
+    public DbSet<MatchmakingQueue> MatchmakingQueues => Set<MatchmakingQueue>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

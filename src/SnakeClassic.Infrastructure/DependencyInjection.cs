@@ -62,6 +62,9 @@ public static class DependencyInjection
         services.AddScoped<INotificationJobService, NotificationJobService>();
         services.AddScoped<ITournamentManagementJobService, TournamentManagementJobService>();
 
+        // Multiplayer services
+        services.AddScoped<IMatchmakingService, MatchmakingService>();
+
         return services;
     }
 

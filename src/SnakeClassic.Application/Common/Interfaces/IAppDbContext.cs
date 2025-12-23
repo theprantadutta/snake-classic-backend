@@ -24,6 +24,7 @@ public interface IAppDbContext
     DbSet<NotificationHistory> NotificationHistories { get; }
     DbSet<ScheduledJob> ScheduledJobs { get; }
     DbSet<DailyLoginBonus> DailyLoginBonuses { get; }
+    DbSet<MatchmakingQueue> MatchmakingQueues { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

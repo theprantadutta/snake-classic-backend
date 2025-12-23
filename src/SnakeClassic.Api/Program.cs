@@ -76,6 +76,10 @@ try
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
+    // Register Api-layer services (needs access to SignalR hub)
+    builder.Services.AddScoped<IMatchmakingJobService, MatchmakingJobService>();
+    builder.Services.AddScoped<IGameCleanupJobService, GameCleanupJobService>();
+
     // Configure JSON serialization (snake_case for frontend compatibility)
     builder.Services.AddControllers()
         .AddJsonOptions(options =>
@@ -287,6 +291,18 @@ finally
 // Configure recurring background jobs (equivalent to Python APScheduler)
 static void ConfigureRecurringJobs()
 {
+    try
+    {
+        ConfigureRecurringJobsInternal();
+    }
+    catch (Hangfire.PostgreSql.PostgreSqlDistributedLockException ex)
+    {
+        Log.Warning(ex, "Failed to acquire lock for recurring jobs (stale lock?). Jobs will be configured on next restart.");
+    }
+}
+
+static void ConfigureRecurringJobsInternal()
+{
     // Daily challenge reminder - runs at 9:00 AM every day
     RecurringJob.AddOrUpdate<INotificationJobService>(
         "daily-challenge-reminder",
@@ -347,7 +363,43 @@ static void ConfigureRecurringJobs()
         "*/15 * * * *", // Cron: every 15 minutes
         new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
-    Log.Information("Hangfire recurring jobs configured successfully (including tournament management)");
+    // ============================================
+    // MATCHMAKING JOBS
+    // ============================================
+
+    // Process matchmaking queue - runs every 5 seconds
+    RecurringJob.AddOrUpdate<IMatchmakingJobService>(
+        "process-matchmaking",
+        service => service.ProcessMatchmakingQueue(),
+        "*/5 * * * * *", // Cron: every 5 seconds
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // ============================================
+    // GAME CLEANUP JOBS
+    // ============================================
+
+    // Cleanup expired reconnections - runs every 30 seconds
+    RecurringJob.AddOrUpdate<IGameCleanupJobService>(
+        "cleanup-expired-reconnections",
+        service => service.CleanupExpiredReconnections(),
+        "*/30 * * * * *", // Cron: every 30 seconds
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // Cleanup abandoned games - runs every 5 minutes
+    RecurringJob.AddOrUpdate<IGameCleanupJobService>(
+        "cleanup-abandoned-games",
+        service => service.CleanupAbandonedGames(),
+        "*/5 * * * *", // Cron: every 5 minutes
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // Archive old games - runs daily at 3 AM
+    RecurringJob.AddOrUpdate<IGameCleanupJobService>(
+        "archive-old-games",
+        service => service.ArchiveOldGames(),
+        "0 3 * * *", // Cron: 3 AM daily
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    Log.Information("Hangfire recurring jobs configured successfully (tournaments, matchmaking, and game cleanup)");
 }
 
 // Hangfire authorization filter for dashboard with Basic Auth

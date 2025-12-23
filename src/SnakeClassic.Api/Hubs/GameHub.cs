@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using SnakeClassic.Application.Common.Interfaces;
 using SnakeClassic.Domain.Enums;
+using SnakeClassic.Infrastructure.Services;
 
 namespace SnakeClassic.Api.Hubs;
 
@@ -11,15 +12,18 @@ public class GameHub : Hub
 {
     private readonly IAppDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly IMatchmakingService _matchmakingService;
     private readonly ILogger<GameHub> _logger;
 
     public GameHub(
         IAppDbContext context,
         ICurrentUserService currentUser,
+        IMatchmakingService matchmakingService,
         ILogger<GameHub> logger)
     {
         _context = context;
         _currentUser = currentUser;
+        _matchmakingService = matchmakingService;
         _logger = logger;
     }
 
@@ -33,17 +37,58 @@ public class GameHub : Hub
     {
         _logger.LogInformation("User {UserId} disconnected from GameHub", _currentUser.UserId);
 
-        // Handle player disconnection - leave any active game
         if (_currentUser.UserId.HasValue)
         {
+            // Remove from matchmaking queue if in one
+            await _matchmakingService.LeaveQueue(_currentUser.UserId.Value);
+
+            // Handle player disconnection - don't leave game, just mark as disconnected for reconnection
             var player = await _context.MultiplayerPlayers
                 .Include(p => p.Game)
                 .FirstOrDefaultAsync(p => p.UserId == _currentUser.UserId.Value &&
-                    p.Game.Status != MultiplayerGameStatus.Finished);
+                    p.Game.Status != MultiplayerGameStatus.Finished &&
+                    p.IsAlive);
 
             if (player != null)
             {
-                await LeaveRoom(player.Game.RoomCode);
+                var roomCode = player.Game.RoomCode;
+
+                // If game is in Waiting status, remove player entirely
+                if (player.Game.Status == MultiplayerGameStatus.Waiting)
+                {
+                    await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomCode);
+                    _context.MultiplayerPlayers.Remove(player);
+                    await _context.SaveChangesAsync(default);
+
+                    await Clients.Group(roomCode).SendAsync("PlayerLeft", new
+                    {
+                        UserId = _currentUser.UserId.Value,
+                        PlayerIndex = player.PlayerIndex
+                    });
+
+                    _logger.LogInformation("User {UserId} left waiting room {RoomCode}", _currentUser.UserId, roomCode);
+                }
+                // If game is Playing, mark as disconnected (allow reconnection)
+                else if (player.Game.Status == MultiplayerGameStatus.Playing)
+                {
+                    player.DisconnectedAt = DateTime.UtcNow;
+                    player.ConnectionId = null;
+                    await _context.SaveChangesAsync(default);
+
+                    await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomCode);
+
+                    // Notify others of temporary disconnection
+                    await Clients.Group(roomCode).SendAsync("PlayerDisconnected", new
+                    {
+                        UserId = _currentUser.UserId.Value,
+                        PlayerIndex = player.PlayerIndex,
+                        CanReconnect = true,
+                        ReconnectWindowSeconds = 60
+                    });
+
+                    _logger.LogInformation("User {UserId} disconnected from active game {RoomCode}, can reconnect within 60s",
+                        _currentUser.UserId, roomCode);
+                }
             }
         }
 
@@ -82,6 +127,10 @@ public class GameHub : Hub
             return;
         }
 
+        // Update connection ID
+        existingPlayer.ConnectionId = Context.ConnectionId;
+        await _context.SaveChangesAsync(default);
+
         await Groups.AddToGroupAsync(Context.ConnectionId, roomCode);
 
         var playerInfo = new PlayerInfo
@@ -97,6 +146,172 @@ public class GameHub : Hub
 
         _logger.LogInformation("User {UserId} joined room {RoomCode}", _currentUser.UserId, roomCode);
     }
+
+    #region Matchmaking
+
+    public async Task JoinMatchmaking(string mode, int playerCount)
+    {
+        if (!_currentUser.UserId.HasValue)
+        {
+            await Clients.Caller.SendAsync("Error", "User not authenticated");
+            return;
+        }
+
+        if (!Enum.TryParse<MultiplayerGameMode>(mode, true, out var gameMode))
+        {
+            await Clients.Caller.SendAsync("MatchmakingError", new
+            {
+                Error = $"Invalid game mode: {mode}"
+            });
+            return;
+        }
+
+        var result = await _matchmakingService.JoinQueue(
+            _currentUser.UserId.Value,
+            Context.ConnectionId,
+            gameMode,
+            playerCount);
+
+        if (result.Success)
+        {
+            await Clients.Caller.SendAsync("MatchmakingJoined", new
+            {
+                Mode = mode,
+                PlayerCount = playerCount,
+                QueuePosition = result.QueuePosition,
+                EstimatedWaitSeconds = result.EstimatedWaitSeconds
+            });
+
+            _logger.LogInformation("User {UserId} joined matchmaking for {Mode} {PlayerCount}p",
+                _currentUser.UserId, mode, playerCount);
+        }
+        else
+        {
+            await Clients.Caller.SendAsync("MatchmakingError", new
+            {
+                Error = result.Error
+            });
+        }
+    }
+
+    public async Task LeaveMatchmaking()
+    {
+        if (!_currentUser.UserId.HasValue)
+            return;
+
+        await _matchmakingService.LeaveQueue(_currentUser.UserId.Value);
+
+        await Clients.Caller.SendAsync("MatchmakingLeft", new
+        {
+            Message = "Left matchmaking queue"
+        });
+
+        _logger.LogInformation("User {UserId} left matchmaking", _currentUser.UserId);
+    }
+
+    #endregion
+
+    #region Reconnection
+
+    public async Task Reconnect(string roomCode)
+    {
+        if (!_currentUser.UserId.HasValue)
+        {
+            await Clients.Caller.SendAsync("ReconnectFailed", new { Error = "User not authenticated" });
+            return;
+        }
+
+        var game = await _context.MultiplayerGames
+            .Include(g => g.Players)
+            .ThenInclude(p => p.User)
+            .FirstOrDefaultAsync(g => g.RoomCode == roomCode);
+
+        if (game == null)
+        {
+            await Clients.Caller.SendAsync("ReconnectFailed", new { Error = "Game not found" });
+            return;
+        }
+
+        var player = game.Players.FirstOrDefault(p => p.UserId == _currentUser.UserId.Value);
+        if (player == null)
+        {
+            await Clients.Caller.SendAsync("ReconnectFailed", new { Error = "You are not in this game" });
+            return;
+        }
+
+        // Check if player can reconnect (within 60 second window)
+        if (!player.CanReconnect && player.DisconnectedAt != null)
+        {
+            await Clients.Caller.SendAsync("ReconnectFailed", new { Error = "Reconnection window expired" });
+            return;
+        }
+
+        // Check if game is still playable
+        if (game.Status == MultiplayerGameStatus.Finished)
+        {
+            await Clients.Caller.SendAsync("ReconnectFailed", new { Error = "Game has ended" });
+            return;
+        }
+
+        // Restore player connection
+        player.ConnectionId = Context.ConnectionId;
+        player.DisconnectedAt = null;
+        await _context.SaveChangesAsync(default);
+
+        // Rejoin SignalR group
+        await Groups.AddToGroupAsync(Context.ConnectionId, roomCode);
+
+        // Send full game state to reconnected player
+        var allPlayers = game.Players.Select(p => new
+        {
+            UserId = p.UserId,
+            Username = p.User.Username ?? p.User.DisplayName ?? "Player",
+            PlayerIndex = p.PlayerIndex,
+            IsAlive = p.IsAlive,
+            IsReady = p.IsReady,
+            SnakeColor = p.SnakeColor,
+            SnakePositions = p.SnakePositions,
+            Direction = p.Direction,
+            Score = p.Score,
+            IsDisconnected = p.DisconnectedAt != null
+        }).ToList();
+
+        await Clients.Caller.SendAsync("ReconnectSuccess", new
+        {
+            GameId = game.GameId,
+            RoomCode = game.RoomCode,
+            Status = game.Status.ToString(),
+            Mode = game.Mode.ToString(),
+            YourPlayerIndex = player.PlayerIndex,
+            Players = allPlayers,
+            FoodPositions = game.FoodPositions,
+            PowerUps = game.PowerUps,
+            GameSettings = game.GameSettings
+        });
+
+        // Notify other players
+        await Clients.OthersInGroup(roomCode).SendAsync("PlayerReconnected", new
+        {
+            UserId = _currentUser.UserId.Value,
+            PlayerIndex = player.PlayerIndex
+        });
+
+        _logger.LogInformation("User {UserId} reconnected to game {RoomCode}", _currentUser.UserId, roomCode);
+    }
+
+    #endregion
+
+    #region Heartbeat
+
+    public async Task Ping()
+    {
+        await Clients.Caller.SendAsync("Pong", new
+        {
+            Timestamp = DateTime.UtcNow
+        });
+    }
+
+    #endregion
 
     public async Task LeaveRoom(string roomCode)
     {
@@ -312,27 +527,44 @@ public class GameHub : Hub
             return;
 
         var player = game.Players.FirstOrDefault(p => p.UserId == _currentUser.UserId.Value);
-        if (player == null)
+        if (player == null || !player.IsAlive)
             return;
 
+        // Calculate elimination rank (higher is worse - last to die is better)
+        var aliveBefore = game.Players.Count(p => p.IsAlive);
+        var eliminationRank = aliveBefore; // If 4 alive, dying now means rank 4 (4th place)
+
         player.IsAlive = false;
+        player.EliminatedAt = DateTime.UtcNow;
+        player.EliminationRank = eliminationRank;
         await _context.SaveChangesAsync(default);
 
-        await Clients.Group(roomCode).SendAsync("PlayerDied", new
+        await Clients.Group(roomCode).SendAsync("PlayerEliminated", new
         {
             UserId = _currentUser.UserId.Value,
             PlayerIndex = player.PlayerIndex,
-            FinalScore = player.Score
+            FinalScore = player.Score,
+            EliminationRank = eliminationRank,
+            PlayersRemaining = aliveBefore - 1
         });
 
         // Check if game should end (only one or zero players alive)
         var alivePlayers = game.Players.Where(p => p.IsAlive).ToList();
         if (alivePlayers.Count <= 1)
         {
-            await EndGame(game, alivePlayers.FirstOrDefault()?.UserId);
+            // Winner is the last player standing
+            var winner = alivePlayers.FirstOrDefault();
+            if (winner != null)
+            {
+                winner.EliminationRank = 1; // 1st place
+                winner.EliminatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync(default);
+            }
+            await EndGame(game, winner?.UserId);
         }
 
-        _logger.LogInformation("Player {UserId} died in room {RoomCode}", _currentUser.UserId, roomCode);
+        _logger.LogInformation("Player {UserId} eliminated (rank {Rank}) in room {RoomCode}",
+            _currentUser.UserId, eliminationRank, roomCode);
     }
 
     public async Task GameOver(string roomCode, int finalScore)
@@ -369,14 +601,16 @@ public class GameHub : Hub
         game.FinishedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(default);
 
+        // For multi-player games, use elimination rank; for 2-player, use score
         var results = game.Players
-            .OrderByDescending(p => p.Score)
+            .OrderBy(p => p.EliminationRank ?? int.MaxValue) // Winner (rank 1) first
+            .ThenByDescending(p => p.Score) // Tie-break by score
             .Select((p, index) => new PlayerResult
             {
                 UserId = p.UserId,
                 PlayerIndex = p.PlayerIndex,
                 Score = p.Score,
-                Rank = index + 1
+                Rank = p.EliminationRank ?? (index + 1)
             })
             .ToList();
 
@@ -384,10 +618,11 @@ public class GameHub : Hub
         {
             WinnerId = winnerId ?? results.FirstOrDefault()?.UserId,
             Results = results,
-            FinishedAt = game.FinishedAt
+            FinishedAt = game.FinishedAt,
+            TotalPlayers = game.Players.Count
         });
 
-        _logger.LogInformation("Game {RoomCode} ended", game.RoomCode);
+        _logger.LogInformation("Game {RoomCode} ended with {PlayerCount} players", game.RoomCode, game.Players.Count);
     }
 }
 

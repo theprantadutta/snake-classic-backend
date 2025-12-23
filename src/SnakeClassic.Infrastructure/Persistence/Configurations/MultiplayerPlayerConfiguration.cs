@@ -13,6 +13,10 @@ public class MultiplayerPlayerConfiguration : IEntityTypeConfiguration<Multiplay
         builder.Property(p => p.Direction).HasMaxLength(10);
         builder.Property(p => p.SnakeColor).HasMaxLength(20);
         builder.Property(p => p.SnakePositions).HasColumnType("jsonb");
+        builder.Property(p => p.ConnectionId).HasMaxLength(100);
+
+        // Ignore computed property
+        builder.Ignore(p => p.CanReconnect);
 
         // Composite unique index
         builder.HasIndex(p => new { p.GameId, p.UserId }).IsUnique();

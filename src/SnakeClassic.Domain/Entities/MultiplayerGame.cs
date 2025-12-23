@@ -6,7 +6,7 @@ namespace SnakeClassic.Domain.Entities;
 public class MultiplayerGame : BaseEntity
 {
     public string GameId { get; set; } = null!;
-    public MultiplayerGameMode Mode { get; set; } = MultiplayerGameMode.FreeForAll;
+    public MultiplayerGameMode Mode { get; set; } = MultiplayerGameMode.Classic;
     public MultiplayerGameStatus Status { get; set; } = MultiplayerGameStatus.Waiting;
     public string RoomCode { get; set; } = null!;
     public int MaxPlayers { get; set; } = 4;

@@ -369,42 +369,42 @@ static void ConfigureRecurringJobsInternal()
         new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
     // ============================================
-    // MATCHMAKING JOBS
+    // MATCHMAKING JOBS (disabled - multiplayer coming soon)
     // ============================================
 
-    // Process matchmaking queue - runs every 5 seconds
-    RecurringJob.AddOrUpdate<IMatchmakingJobService>(
-        "process-matchmaking",
-        service => service.ProcessMatchmakingQueue(),
-        "*/5 * * * * *", // Cron: every 5 seconds
-        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+    // // Process matchmaking queue - runs every 5 seconds
+    // RecurringJob.AddOrUpdate<IMatchmakingJobService>(
+    //     "process-matchmaking",
+    //     service => service.ProcessMatchmakingQueue(),
+    //     "*/5 * * * * *", // Cron: every 5 seconds
+    //     new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
     // ============================================
-    // GAME CLEANUP JOBS
+    // GAME CLEANUP JOBS (disabled - multiplayer coming soon)
     // ============================================
 
-    // Cleanup expired reconnections - runs every 30 seconds
-    RecurringJob.AddOrUpdate<IGameCleanupJobService>(
-        "cleanup-expired-reconnections",
-        service => service.CleanupExpiredReconnections(),
-        "*/30 * * * * *", // Cron: every 30 seconds
-        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+    // // Cleanup expired reconnections - runs every 30 seconds
+    // RecurringJob.AddOrUpdate<IGameCleanupJobService>(
+    //     "cleanup-expired-reconnections",
+    //     service => service.CleanupExpiredReconnections(),
+    //     "*/30 * * * * *", // Cron: every 30 seconds
+    //     new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
-    // Cleanup abandoned games - runs every 5 minutes
-    RecurringJob.AddOrUpdate<IGameCleanupJobService>(
-        "cleanup-abandoned-games",
-        service => service.CleanupAbandonedGames(),
-        "*/5 * * * *", // Cron: every 5 minutes
-        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+    // // Cleanup abandoned games - runs every 5 minutes
+    // RecurringJob.AddOrUpdate<IGameCleanupJobService>(
+    //     "cleanup-abandoned-games",
+    //     service => service.CleanupAbandonedGames(),
+    //     "*/5 * * * *", // Cron: every 5 minutes
+    //     new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
-    // Archive old games - runs daily at 3 AM
-    RecurringJob.AddOrUpdate<IGameCleanupJobService>(
-        "archive-old-games",
-        service => service.ArchiveOldGames(),
-        "0 3 * * *", // Cron: 3 AM daily
-        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+    // // Archive old games - runs daily at 3 AM
+    // RecurringJob.AddOrUpdate<IGameCleanupJobService>(
+    //     "archive-old-games",
+    //     service => service.ArchiveOldGames(),
+    //     "0 3 * * *", // Cron: 3 AM daily
+    //     new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
-    Log.Information("Hangfire recurring jobs configured successfully (tournaments, matchmaking, and game cleanup)");
+    Log.Information("Hangfire recurring jobs configured successfully (tournaments only - multiplayer coming soon)");
 }
 
 // Hangfire authorization filter for dashboard with Basic Auth

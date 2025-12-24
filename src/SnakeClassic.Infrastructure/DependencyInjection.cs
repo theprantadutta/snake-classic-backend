@@ -29,7 +29,11 @@ public static class DependencyInjection
             options.UseNpgsql(dataSource, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-                npgsqlOptions.EnableRetryOnFailure(3);
+                // Retry on transient failures (connection drops, network issues, etc.)
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(10),
+                    errorCodesToAdd: null); // Uses Npgsql's default transient error codes
             });
         });
 
@@ -80,7 +84,8 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrEmpty(connectionString))
         {
-            return connectionString;
+            // Append connection resiliency settings if not already present
+            return AppendConnectionResiliencySettings(connectionString);
         }
 
         // Build from environment variables
@@ -90,6 +95,49 @@ public static class DependencyInjection
         var username = Environment.GetEnvironmentVariable("DATABASE_USERNAME") ?? "postgres";
         var password = Environment.GetEnvironmentVariable("DATABASE_PASSWORD") ?? "";
 
-        return $"Host={host};Port={port};Database={database};Username={username};Password={password}";
+        var baseConnectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password}";
+        return AppendConnectionResiliencySettings(baseConnectionString);
+    }
+
+    /// <summary>
+    /// Appends connection resiliency settings to prevent stale connection errors.
+    /// These settings help with:
+    /// - Keepalive: Periodic packets to prevent server from closing idle connections
+    /// - Connection Lifetime: Max time a connection can be reused before being recycled
+    /// - Connection Idle Lifetime: Max time a connection can sit idle in pool
+    /// - Pooling settings: Control how connections are managed
+    /// </summary>
+    private static string AppendConnectionResiliencySettings(string connectionString)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            // Send keepalive packets every 30 seconds to keep connections alive
+            KeepAlive = 30,
+
+            // Max time (seconds) a connection can be reused before being closed and recreated
+            // Prevents issues with connections that become stale after long periods
+            ConnectionLifetime = 300, // 5 minutes
+
+            // Max time (seconds) a connection can sit idle in the pool before being pruned
+            ConnectionIdleLifetime = 60, // 1 minute
+
+            // How often (seconds) to check for and remove idle connections
+            ConnectionPruningInterval = 10,
+
+            // Connection pool size
+            MinPoolSize = 1,
+            MaxPoolSize = 20,
+
+            // Timeout for acquiring a connection from pool (seconds)
+            Timeout = 30,
+
+            // Command timeout (seconds)
+            CommandTimeout = 60,
+
+            // Enable connection pooling
+            Pooling = true,
+        };
+
+        return builder.ConnectionString;
     }
 }

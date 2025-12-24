@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using SnakeClassic.Application.Common.Interfaces;
 using SnakeClassic.Domain.Enums;
 using SnakeClassic.Infrastructure.Services;
@@ -14,17 +15,23 @@ public class GameHub : Hub
     private readonly ICurrentUserService _currentUser;
     private readonly IMatchmakingService _matchmakingService;
     private readonly ILogger<GameHub> _logger;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IHubContext<GameHub> _hubContext;
 
     public GameHub(
         IAppDbContext context,
         ICurrentUserService currentUser,
         IMatchmakingService matchmakingService,
-        ILogger<GameHub> logger)
+        ILogger<GameHub> logger,
+        IServiceScopeFactory serviceScopeFactory,
+        IHubContext<GameHub> hubContext)
     {
         _context = context;
         _currentUser = currentUser;
         _matchmakingService = matchmakingService;
         _logger = logger;
+        _serviceScopeFactory = serviceScopeFactory;
+        _hubContext = hubContext;
     }
 
     public override async Task OnConnectedAsync()
@@ -144,13 +151,15 @@ public class GameHub : Hub
                 Username = player.User.Username ?? player.User.DisplayName ?? "Player",
                 PlayerIndex = player.PlayerIndex,
                 IsReady = player.IsReady,
-                SnakeColor = player.SnakeColor
+                SnakeColor = player.SnakeColor,
+                SnakePositions = player.SnakePositions,
+                Direction = player.Direction
             };
 
             await Clients.Caller.SendAsync("PlayerJoined", playerInfo);
 
-            _logger.LogDebug("Sent existing player {PlayerIndex} ({Username}) to newly joined user {UserId}",
-                player.PlayerIndex, playerInfo.Username, _currentUser.UserId);
+            _logger.LogDebug("Sent existing player {PlayerIndex} ({Username}) to newly joined user {UserId} with {SnakeCount} snake positions",
+                player.PlayerIndex, playerInfo.Username, _currentUser.UserId, player.SnakePositions?.Count ?? 0);
         }
 
         // Notify OTHERS in the group about the new player (they already have their own info)
@@ -160,7 +169,9 @@ public class GameHub : Hub
             Username = existingPlayer.User.Username ?? existingPlayer.User.DisplayName ?? "Player",
             PlayerIndex = existingPlayer.PlayerIndex,
             IsReady = existingPlayer.IsReady,
-            SnakeColor = existingPlayer.SnakeColor
+            SnakeColor = existingPlayer.SnakeColor,
+            SnakePositions = existingPlayer.SnakePositions,
+            Direction = existingPlayer.Direction
         };
 
         await Clients.OthersInGroup(roomCode).SendAsync("PlayerJoined", newPlayerInfo);
@@ -435,8 +446,15 @@ public class GameHub : Hub
 
     public async Task StartGame(string roomCode)
     {
+        _logger.LogInformation("StartGame called by user {UserId} for room {RoomCode}",
+            _currentUser.UserId, roomCode);
+
         if (!_currentUser.UserId.HasValue)
+        {
+            _logger.LogWarning("StartGame failed: User not authenticated");
+            await Clients.Caller.SendAsync("Error", "User not authenticated");
             return;
+        }
 
         var game = await _context.MultiplayerGames
             .Include(g => g.Players)
@@ -444,19 +462,26 @@ public class GameHub : Hub
 
         if (game == null)
         {
+            _logger.LogWarning("StartGame failed: Game not found for room {RoomCode}", roomCode);
             await Clients.Caller.SendAsync("Error", "Game not found");
             return;
         }
 
+        _logger.LogDebug("StartGame: Game found - HostId={HostId}, Status={Status}, PlayerCount={PlayerCount}",
+            game.HostId, game.Status, game.Players.Count);
+
         // Only host can start the game
         if (game.HostId != _currentUser.UserId.Value)
         {
+            _logger.LogWarning("StartGame failed: User {UserId} is not host (host is {HostId})",
+                _currentUser.UserId, game.HostId);
             await Clients.Caller.SendAsync("Error", "Only the host can start the game");
             return;
         }
 
         if (game.Status != MultiplayerGameStatus.Waiting)
         {
+            _logger.LogWarning("StartGame failed: Game status is {Status}, not Waiting", game.Status);
             await Clients.Caller.SendAsync("Error", "Game cannot be started");
             return;
         }
@@ -465,6 +490,9 @@ public class GameHub : Hub
         var allReady = game.Players.All(p => p.IsReady);
         if (!allReady)
         {
+            var notReadyPlayers = game.Players.Where(p => !p.IsReady).Select(p => p.UserId);
+            _logger.LogWarning("StartGame failed: Not all players ready. Not ready: {NotReady}",
+                string.Join(", ", notReadyPlayers));
             await Clients.Caller.SendAsync("Error", "Not all players are ready");
             return;
         }
@@ -473,29 +501,88 @@ public class GameHub : Hub
         game.Status = MultiplayerGameStatus.Countdown;
         await _context.SaveChangesAsync(default);
 
+        _logger.LogInformation("Game {RoomCode} starting countdown - broadcasting GameStarting to {PlayerCount} players",
+            roomCode, game.Players.Count);
+
         await Clients.Group(roomCode).SendAsync("GameStarting", new
         {
             CountdownSeconds = 3
         });
 
-        // After countdown, set to playing
+        // Capture values needed for background task
+        var gameId = game.Id;
+        var capturedRoomCode = roomCode;
+        var scopeFactory = _serviceScopeFactory;
+        var hubContext = _hubContext;
+
+        // After countdown, set to playing using proper scoped services
         _ = Task.Run(async () =>
         {
-            await Task.Delay(3000);
-
-            game.Status = MultiplayerGameStatus.Playing;
-            game.StartedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync(default);
-
-            await Clients.Group(roomCode).SendAsync("GameStarted", new
+            try
             {
-                StartedAt = game.StartedAt,
-                FoodPositions = game.FoodPositions,
-                PowerUps = game.PowerUps
-            });
+                await Task.Delay(3000);
+
+                // Create a new scope for the background operation
+                using var scope = scopeFactory.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<IAppDbContext>();
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<GameHub>>();
+
+                // Re-fetch the game in the new scope with players
+                var gameToUpdate = await dbContext.MultiplayerGames
+                    .Include(g => g.Players)
+                    .ThenInclude(p => p.User)
+                    .FirstOrDefaultAsync(g => g.Id == gameId);
+
+                if (gameToUpdate != null)
+                {
+                    gameToUpdate.Status = MultiplayerGameStatus.Playing;
+                    gameToUpdate.StartedAt = DateTime.UtcNow;
+                    await dbContext.SaveChangesAsync(default);
+
+                    logger.LogInformation("Game {RoomCode} started - broadcasting GameStarted with {PlayerCount} players",
+                        capturedRoomCode, gameToUpdate.Players.Count);
+
+                    // Build player data with snake positions
+                    var playerData = gameToUpdate.Players.Select(p => new
+                    {
+                        UserId = p.UserId,
+                        Username = p.User.Username ?? p.User.DisplayName ?? "Player",
+                        PlayerIndex = p.PlayerIndex,
+                        SnakePositions = p.SnakePositions,
+                        Direction = p.Direction,
+                        SnakeColor = p.SnakeColor,
+                        Score = p.Score,
+                        IsAlive = p.IsAlive
+                    }).ToList();
+
+                    // Use IHubContext to broadcast (works outside of hub method)
+                    await hubContext.Clients.Group(capturedRoomCode).SendAsync("GameStarted", new
+                    {
+                        StartedAt = gameToUpdate.StartedAt,
+                        FoodPositions = gameToUpdate.FoodPositions,
+                        PowerUps = gameToUpdate.PowerUps,
+                        Players = playerData,
+                        BoardSize = gameToUpdate.GameSettings.ContainsKey("boardSize")
+                            ? gameToUpdate.GameSettings["boardSize"]
+                            : 20,
+                        GameSettings = gameToUpdate.GameSettings
+                    });
+                }
+                else
+                {
+                    logger.LogWarning("Game {GameId} not found when trying to start", gameId);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log any errors in the background task
+                using var scope = scopeFactory.CreateScope();
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<GameHub>>();
+                logger.LogError(ex, "Error in background task for starting game {RoomCode}", capturedRoomCode);
+            }
         });
 
-        _logger.LogInformation("Game {RoomCode} started by user {UserId}", roomCode, _currentUser.UserId);
+        _logger.LogInformation("Game {RoomCode} countdown initiated by user {UserId}", roomCode, _currentUser.UserId);
     }
 
     public async Task SendMove(string roomCode, MoveData moveData)
@@ -684,6 +771,8 @@ public class PlayerInfo
     public int PlayerIndex { get; set; }
     public bool IsReady { get; set; }
     public string? SnakeColor { get; set; }
+    public List<Dictionary<string, object>>? SnakePositions { get; set; }
+    public string? Direction { get; set; }
 }
 
 public class MoveData

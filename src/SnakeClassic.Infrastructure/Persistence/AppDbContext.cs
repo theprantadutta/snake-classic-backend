@@ -30,6 +30,8 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<ScheduledJob> ScheduledJobs => Set<ScheduledJob>();
     public DbSet<DailyLoginBonus> DailyLoginBonuses => Set<DailyLoginBonus>();
     public DbSet<MatchmakingQueue> MatchmakingQueues => Set<MatchmakingQueue>();
+    public DbSet<DailyChallenge> DailyChallenges => Set<DailyChallenge>();
+    public DbSet<UserDailyChallenge> UserDailyChallenges => Set<UserDailyChallenge>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

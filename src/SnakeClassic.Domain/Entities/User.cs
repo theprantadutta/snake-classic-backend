@@ -40,6 +40,7 @@ public class User : BaseEntity
     public ICollection<UserBattlePassProgress> BattlePassProgress { get; set; } = new List<UserBattlePassProgress>();
     public ICollection<Purchase> Purchases { get; set; } = new List<Purchase>();
     public ICollection<GameReplay> GameReplays { get; set; } = new List<GameReplay>();
+    public ICollection<UserDailyChallenge> DailyChallenges { get; set; } = new List<UserDailyChallenge>();
 
     public bool IsPremium => PremiumContent?.SubscriptionActive == true ||
                              PremiumContent?.PremiumTier != "free";

@@ -369,6 +369,31 @@ static void ConfigureRecurringJobsInternal()
         new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
     // ============================================
+    // DAILY CHALLENGE JOBS
+    // ============================================
+
+    // Generate daily challenges - runs at midnight UTC
+    RecurringJob.AddOrUpdate<IDailyChallengeJobService>(
+        "generate-daily-challenges",
+        service => service.GenerateDailyChallenges(),
+        "0 0 * * *", // Cron: midnight UTC every day
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // Morning challenge reminder - runs at 9 AM local time
+    RecurringJob.AddOrUpdate<IDailyChallengeJobService>(
+        "daily-challenge-morning-reminder",
+        service => service.SendMorningReminder(),
+        "0 9 * * *", // Cron: 9 AM every day
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
+
+    // Evening challenge reminder - runs at 6 PM local time
+    RecurringJob.AddOrUpdate<IDailyChallengeJobService>(
+        "daily-challenge-evening-reminder",
+        service => service.SendEveningReminder(),
+        "0 18 * * *", // Cron: 6 PM every day
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Local });
+
+    // ============================================
     // MATCHMAKING JOBS (disabled - multiplayer coming soon)
     // ============================================
 

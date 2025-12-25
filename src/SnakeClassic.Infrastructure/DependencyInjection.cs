@@ -71,6 +71,7 @@ public static class DependencyInjection
         // Background job services
         services.AddScoped<INotificationJobService, NotificationJobService>();
         services.AddScoped<ITournamentManagementJobService, TournamentManagementJobService>();
+        services.AddScoped<IDailyChallengeJobService, DailyChallengeJobService>();
 
         // Multiplayer services
         services.AddScoped<IMatchmakingService, MatchmakingService>();

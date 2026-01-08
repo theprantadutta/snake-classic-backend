@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SnakeClassic.Application.Features.Auth.Queries.GetCurrentUser;
 using SnakeClassic.Application.Features.Users.Commands.RegisterFcmToken;
+using SnakeClassic.Application.Features.Users.Commands.ResetStatistics;
 using SnakeClassic.Application.Features.Users.Commands.SetUsername;
 using SnakeClassic.Application.Features.Users.Commands.UpdateProfile;
 using SnakeClassic.Application.Features.Users.Queries.CheckUsername;
@@ -75,6 +76,13 @@ public class UsersController : BaseApiController
             request.SubscribedTopics
         );
         var result = await Mediator.Send(command);
+        return HandleResult(result);
+    }
+
+    [HttpPost("me/reset-statistics")]
+    public async Task<ActionResult> ResetStatistics()
+    {
+        var result = await Mediator.Send(new ResetStatisticsCommand());
         return HandleResult(result);
     }
 }
